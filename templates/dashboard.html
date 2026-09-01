@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartDialer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            color-scheme: light;
+            --page: #f5efe3;
+            --surface: #fffdf8;
+            --surface-sunken: #efe4d3;
+            --border: rgba(72,50,28,0.12);
+            --border-strong: rgba(72,50,28,0.22);
+            --text-primary: #2e2013;
+            --text-secondary: #6b5842;
+            --text-muted: #9c8a72;
+            --grid-line: #e6dac6;
+            --axis-line: #cdbb9e;
+            --accent: #8a5a34;
+            --accent-soft: #f1e6d6;
+            --series-agents: #8a5a34;
+            --series-calls: #b1552f;
+            --good: #5b7a3a;
+            --good-soft: #eaf0df;
+            --warning: #a8791f;
+            --warning-soft: #f6ecd6;
+            --critical: #a63d2f;
+            --critical-soft: #f5e2dd;
+            --shadow: 0 1px 2px rgba(72,50,28,0.05), 0 8px 24px rgba(72,50,28,0.07);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            background: var(--page);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .shell {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 28px 24px 56px;
+        }
+
+        header.topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .brand {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .brand .wordmark {
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+        }
+
+        .brand .tagline {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .live-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 14px;
+            border-radius: 999px;
+            background: var(--good-soft);
+            border: 1px solid var(--border);
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--good);
+            white-space: nowrap;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--good);
+            box-shadow: 0 0 0 0 rgba(91,122,58,0.55);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(91,122,58,0.45); }
+            70%  { box-shadow: 0 0 0 7px rgba(91,122,58,0); }
+            100% { box-shadow: 0 0 0 0 rgba(91,122,58,0); }
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .tile {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px 20px;
+            box-shadow: var(--shadow);
+        }
+
+        .tile .label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+        }
+
+        .tile .value {
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+            margin: 10px 0 4px;
+            line-height: 1;
+        }
+
+        .tile .sublabel {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .value.good { color: var(--good); }
+        .value.warn { color: var(--warning); }
+        .value.critical { color: var(--critical); }
+
+        .panels {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+            gap: 14px;
+            margin-bottom: 14px;
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px 22px 8px;
+            box-shadow: var(--shadow);
+        }
+
+        .panel-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .panel-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
+        }
+
+        .panel-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .chart-wrap {
+            position: relative;
+            height: 260px;
+        }
+
+        .status-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px 22px;
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+        }
+
+        .status-card .panel-title { margin-bottom: 14px; }
+
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 11px 4px;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.9rem;
+        }
+
+        .status-row:last-child { border-bottom: none; }
+
+        .status-label { color: var(--text-secondary); font-weight: 500; }
+        .status-value { font-weight: 700; color: var(--text-primary); }
+
+        .badge-running {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--good);
+        }
+        .badge-running::before {
+            content: "";
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--good);
+        }
+
+        .footer-note {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        @media (max-width: 560px) {
+            header.topbar { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="wordmark">SmartDialer</div>
+                <div class="tagline">Live campaign monitor</div>
+            </div>
+            <div class="live-pill"><span class="live-dot"></span>Live</div>
+        </header>
+
+        <div class="kpi-grid">
+            <div class="tile">
+                <div class="label">Calls initiated</div>
+                <div class="value" id="calls-initiated">0</div>
+                <div class="sublabel">Total calls started</div>
+            </div>
+            <div class="tile">
+                <div class="label">Calls answered</div>
+                <div class="value good" id="calls-answered">0</div>
+                <div class="sublabel">Connected borrowers</div>
+            </div>
+            <div class="tile">
+                <div class="label">Calls completed</div>
+                <div class="value good" id="calls-completed">0</div>
+                <div class="sublabel">Finished conversations</div>
+            </div>
+            <div class="tile">
+                <div class="label">Compliance risk</div>
+                <div class="value" id="calls-abandoned">0</div>
+                <div class="sublabel">Abandoned connected calls</div>
+            </div>
+            <div class="tile">
+                <div class="label">Answer rate</div>
+                <div class="value" id="answer-rate">0%</div>
+                <div class="sublabel">Live EWMA adaptation</div>
+            </div>
+            <div class="tile">
+                <div class="label">Provider health</div>
+                <div class="value" id="provider-health">100%</div>
+                <div class="sublabel">Telecom reliability</div>
+            </div>
+            <div class="tile">
+                <div class="label">Available agents</div>
+                <div class="value" id="available-agents">0</div>
+                <div class="sublabel">Ready to take calls</div>
+            </div>
+            <div class="tile">
+                <div class="label">In-flight unbound</div>
+                <div class="value warn" id="ringing-unbound">0</div>
+                <div class="sublabel">Predictive calls awaiting agents</div>
+            </div>
+        </div>
+
+        <div class="panels">
+            <div class="panel">
+                <div class="panel-head">
+                    <div class="panel-title">Agent status</div>
+                    <div class="panel-subtitle" id="agent-total-label">0 agents</div>
+                </div>
+                <div class="chart-wrap"><canvas id="agentChart"></canvas></div>
+            </div>
+            <div class="panel">
+                <div class="panel-head">
+                    <div class="panel-title">Call status</div>
+                    <div class="panel-subtitle" id="call-total-label">0 calls</div>
+                </div>
+                <div class="chart-wrap"><canvas id="callChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="status-card">
+            <div class="panel-title">System status</div>
+            <div class="status-row">
+                <span class="status-label">Campaign status</span>
+                <span class="status-value badge-running" id="campaign-status">Running</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Last updated</span>
+                <span class="status-value" id="last-updated">—</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Abandon rate (EWMA)</span>
+                <span class="status-value" id="abandon-rate">0%</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Failed calls</span>
+                <span class="status-value" id="calls-failed">0</span>
+            </div>
+        </div>
+
+        <div class="footer-note">Refreshing every 500ms · real-time pacing &amp; safety controller decisions</div>
+    </div>
+
+    <script>
+        // Fixed pipeline order (not alphabetical) so bars keep a stable,
+        // readable position and zero-count states still render instead of
+        // popping in and out as counts change.
+        const AGENT_ORDER = ["OFFLINE", "AVAILABLE", "RESERVED", "DIALING", "CONNECTED", "WRAP_UP", "PAUSED"];
+        const CALL_ORDER = ["QUEUED", "RESERVED", "INITIATED", "RINGING", "ANSWERED", "CONNECTED",
+                             "COMPLETED", "FAILED", "CANCELLED", "ABANDONED"];
+
+        const AGENT_LABELS = {
+            OFFLINE: "Offline", AVAILABLE: "Available", RESERVED: "Reserved", DIALING: "Dialing",
+            CONNECTED: "Connected", WRAP_UP: "Wrap-up", PAUSED: "Paused",
+        };
+        const CALL_LABELS = {
+            QUEUED: "Queued", RESERVED: "Reserved", INITIATED: "Initiated", RINGING: "Ringing",
+            ANSWERED: "Answered", CONNECTED: "Connected", COMPLETED: "Completed", FAILED: "Failed",
+            CANCELLED: "Cancelled", ABANDONED: "Abandoned",
+        };
+
+        function cssVar(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
+
+        const valueLabelPlugin = {
+            id: "valueLabelPlugin",
+            afterDatasetsDraw(chart) {
+                const { ctx, scales: { x } } = chart;
+                const meta = chart.getDatasetMeta(0);
+                const data = chart.data.datasets[0].data;
+                ctx.save();
+                ctx.font = "600 12px Manrope, system-ui, sans-serif";
+                ctx.fillStyle = cssVar("--text-secondary") || "#6b5842";
+                ctx.textBaseline = "middle";
+                meta.data.forEach((bar, i) => {
+                    const val = data[i];
+                    const label = String(val);
+                    const tipX = Math.max(bar.x, x.getPixelForValue(0)) + 8;
+                    ctx.textAlign = "left";
+                    ctx.fillText(label, tipX, bar.y);
+                });
+                ctx.restore();
+            },
+        };
+
+        function buildOptions(maxTicks) {
+            return {
+                indexAxis: "y",
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: { padding: { right: 34 } },
+                animation: { duration: 250 },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: cssVar("--surface") || "#fffdf8",
+                        titleColor: cssVar("--text-primary") || "#2e2013",
+                        bodyColor: cssVar("--text-secondary") || "#6b5842",
+                        borderColor: cssVar("--border-strong") || "#cdbb9e",
+                        borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 8,
+                        displayColors: false,
+                        titleFont: { family: "Manrope", weight: "700" },
+                        bodyFont: { family: "Manrope", weight: "600" },
+                    },
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        grid: { color: cssVar("--grid-line") || "#e6dac6", drawTicks: false },
+                        border: { color: cssVar("--axis-line") || "#cdbb9e" },
+                        ticks: {
+                            color: cssVar("--text-muted") || "#9c8a72",
+                            font: { family: "Manrope", size: 11 },
+                            precision: 0,
+                            maxTicksLimit: maxTicks,
+                        },
+                    },
+                    y: {
+                        grid: { display: false },
+                        border: { color: cssVar("--axis-line") || "#cdbb9e" },
+                        ticks: {
+                            color: cssVar("--text-secondary") || "#6b5842",
+                            font: { family: "Manrope", size: 12, weight: "600" },
+                        },
+                    },
+                },
+            };
+        }
+
+        let agentChart, callChart;
+
+        function makeChart(canvasId, seriesColor) {
+            const ctx = document.getElementById(canvasId).getContext("2d");
+            return new Chart(ctx, {
+                type: "bar",
+                data: { labels: [], datasets: [{
+                    data: [],
+                    backgroundColor: seriesColor,
+                    borderRadius: { topLeft: 0, bottomLeft: 0, topRight: 4, bottomRight: 4 },
+                    borderSkipped: false,
+                    maxBarThickness: 20,
+                    categoryPercentage: 0.7,
+                }] },
+                options: buildOptions(6),
+                plugins: [valueLabelPlugin],
+            });
+        }
+
+        function renderChart(chart, order, labelMap, states) {
+            const values = order.map((k) => states[k] || 0);
+            chart.data.labels = order.map((k) => labelMap[k]);
+            chart.data.datasets[0].data = values;
+            chart.update();
+            return values.reduce((a, b) => a + b, 0);
+        }
+
+        async function updateMetrics() {
+            try {
+                const response = await fetch("/api/metrics");
+                const data = await response.json();
+
+                document.getElementById("calls-initiated").textContent = data.calls_initiated;
+                document.getElementById("calls-answered").textContent = data.calls_answered;
+                document.getElementById("calls-completed").textContent = data.calls_completed;
+                document.getElementById("calls-abandoned").textContent = data.calls_abandoned;
+                document.getElementById("calls-failed").textContent = data.calls_failed;
+                document.getElementById("answer-rate").textContent = (data.answer_rate * 100).toFixed(1) + "%";
+                document.getElementById("abandon-rate").textContent = (data.abandon_rate * 100).toFixed(2) + "%";
+                document.getElementById("provider-health").textContent = (data.provider_health * 100).toFixed(0) + "%";
+                document.getElementById("available-agents").textContent = data.available_agents;
+                document.getElementById("ringing-unbound").textContent = data.ringing_unbound;
+
+                const now = new Date(data.timestamp * 1000);
+                document.getElementById("last-updated").textContent = now.toLocaleTimeString();
+
+                const abandonedEl = document.getElementById("calls-abandoned");
+                abandonedEl.classList.toggle("critical", data.calls_abandoned > 0);
+                abandonedEl.classList.toggle("good", data.calls_abandoned === 0);
+
+                if (!agentChart) agentChart = makeChart("agentChart", cssVar("--series-agents") || "#8a5a34");
+                if (!callChart) callChart = makeChart("callChart", cssVar("--series-calls") || "#b1552f");
+
+                const agentTotal = renderChart(agentChart, AGENT_ORDER, AGENT_LABELS, data.agent_states || {});
+                const callTotal = renderChart(callChart, CALL_ORDER, CALL_LABELS, data.call_states || {});
+                document.getElementById("agent-total-label").textContent = `${agentTotal} agents`;
+                document.getElementById("call-total-label").textContent = `${callTotal} calls`;
+            } catch (error) {
+                console.error("Error fetching metrics:", error);
+            }
+        }
+
+        setInterval(updateMetrics, 500);
+        updateMetrics();
+    </script>
+</body>
+</html>

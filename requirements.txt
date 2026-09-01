@@ -1,0 +1,7 @@
+# Core application logic uses only the standard library (sqlite3, threading, etc.)
+# pytest is only needed to run the test suite.
+pytest>=7.0
+
+# Needed for the web dashboard (web_dashboard.py) and its production server.
+flask>=3.0
+gunicorn>=21.2
