@@ -196,7 +196,7 @@ python3 load_test.py --fast    # shorter run, ~15s
 Everything above runs from a clean checkout with no external services, no
 Docker, no network access required — just Python's stdlib `sqlite3`.
 
-### Live web dashboard (optional)
+### Web Dashboard for display
 
 A small Flask app (`web_dashboard.py`) runs a real `Campaign` in the
 background and serves a live-updating view of it at `http://localhost:9000`
