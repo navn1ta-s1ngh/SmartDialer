@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: smartdialer
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn web_dashboard:app --workers 1 --threads 4 --bind 0.0.0.0:$PORT
