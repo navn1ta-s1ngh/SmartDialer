@@ -510,25 +510,4 @@ in-process queue.
   aggressively" (Safety Controller), not "wait longer once it's already
   happened."
 
-## 13. What I would change with another week
 
-- Swap SQLite for Postgres behind the same `Database`/store interfaces and
-  re-run the load test to confirm the predicted improvement (`SELECT ... FOR
-  UPDATE SKIP LOCKED`, real row-level concurrency) actually materializes,
-  rather than stopping at the documented prediction.
-- Model wrap-up time and wrap-up-to-available transitions with per-agent
-  variability instead of a single fixed `wrap_up_seconds`, and let the
-  Safety Controller account for agents *about* to free up (not just
-  currently `AVAILABLE`) when computing predictive headroom — a small
-  lookahead that would likely reduce unnecessary `REDUCE`/`REJECT` actions
-  without weakening safety.
-- Add borrower retry/recycling with backoff for `FAILED` calls (currently a
-  borrower is claimed once and not requeued), plus per-borrower
-  do-not-call/compliance windows.
-- Replace the in-process `queue.Queue` event pipeline with a real broker
-  interface (even a thin file-backed one) so the "multiple dialer worker
-  *processes*" story in the brief can be demonstrated with actual separate
-  OS processes instead of threads within one process.
-- Add a small persisted audit view (`pacing_log` is already written to
-  SQLite) as an actual queryable report/CLI, not just something read back
-  in tests.
