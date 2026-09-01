@@ -27,7 +27,6 @@ Campaign → Pacing Engine (Progressive / Predictive) → Safety Controller → 
 10. [Failure handling](#10-failure-handling)
 11. [Scaling discussion](#11-scaling-discussion)
 12. [Design tradeoffs](#12-design-tradeoffs)
-13. [What I would change with another week](#13-what-i-would-change-with-another-week)
 
 See also [`ARCHITECTURE.md`](ARCHITECTURE.md) for the short architecture
 decision document (why this stack, why this concurrency strategy, why this
