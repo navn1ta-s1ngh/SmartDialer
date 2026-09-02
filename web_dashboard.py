@@ -46,24 +46,28 @@ def run_campaign():
 
     _db_dir = tempfile.mkdtemp()
     db_path = os.path.join(_db_dir, "web_dashboard.db")
+    print(f"[campaign] starting, db_path={db_path}", flush=True)
     try:
         provider = make_custom_provider(name="WebDashboard",
-                                       time_scale=0.05, 
+                                       time_scale=0.05,
                                        seed=42,
                                        answer_rate=0.35)
-        campaign = Campaign(campaign_id="web_dashboard", 
+        campaign = Campaign(campaign_id="web_dashboard",
                            db_path=db_path,
                            mode=DialMode.PREDICTIVE,
                            provider=provider,
                            tick_interval=0.15,
                            num_event_workers=4)
-        
+        print("[campaign] created, seeding...", flush=True)
+
         # Seed with agents and borrowers
         campaign.seed(num_agents=30, num_borrowers=500)
-        
+        print("[campaign] seeded, starting background loops...", flush=True)
+
         # Start the background loops
         campaign.start()
-        
+        print("[campaign] running, serving metrics now", flush=True)
+
         # Continuously update metrics
         start = time.time()
         while state["running"] and (time.time() - start) < 300:
@@ -94,9 +98,11 @@ def run_campaign():
         # Stop the campaign
         campaign.stop()
     except Exception as e:
+        import sys
         import traceback
-        print(f"Campaign error: {e}")
+        print(f"Campaign error: {e}", flush=True)
         traceback.print_exc()
+        sys.stderr.flush()
     finally:
         # Covers the case where this loop exits on its own (300s cap)
         # while the server keeps running; atexit above covers process exit.

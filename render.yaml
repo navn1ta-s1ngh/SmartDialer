@@ -5,3 +5,11 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn web_dashboard:app --workers 1 --threads 4 --bind 0.0.0.0:$PORT
+    envVars:
+      # Without this, Python block-buffers stdout when it isn't a TTY (as
+      # on Render), so print()/traceback output from the background
+      # campaign thread can sit unflushed indefinitely instead of showing
+      # up in the log stream -- which is exactly what made this fail
+      # silently on first deploy.
+      - key: PYTHONUNBUFFERED
+        value: "1"
