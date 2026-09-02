@@ -116,7 +116,15 @@ def index():
 def metrics():
     """Return current metrics as JSON."""
     if latest_metrics is None:
-        return jsonify({"error": "Campaign not started"}), 503
+        return jsonify({
+            "error": "Campaign not started",
+            "debug": {
+                "pid": os.getpid(),
+                "campaign_is_none": campaign is None,
+                "state_running": state["running"],
+                "campaign_thread_alive": campaign_thread.is_alive() if campaign_thread else None,
+            },
+        }), 503
     return jsonify(latest_metrics)
 
 @app.route("/api/agent-states")
