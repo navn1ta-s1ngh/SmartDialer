@@ -32,6 +32,8 @@ See also [`ARCHITECTURE.md`](ARCHITECTURE.md) for the short architecture
 decision document (why this stack, why this concurrency strategy, why this
 pacing algorithm, etc.).
 
+**Repository structure:**
+
 ```
 smartdialer/
 ├── smartdialer/                  # the engine — no framework, stdlib + sqlite3 only
