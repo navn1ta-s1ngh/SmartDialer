@@ -7,6 +7,7 @@ from __future__ import annotations
 import atexit
 import json
 import os
+import resource
 import shutil
 import tempfile
 import threading
@@ -46,7 +47,9 @@ def run_campaign():
 
     _db_dir = tempfile.mkdtemp()
     db_path = os.path.join(_db_dir, "web_dashboard.db")
-    print(f"[campaign] starting, db_path={db_path}", flush=True)
+    _pid = os.getpid()
+    _tid = threading.get_ident()
+    print(f"[campaign] pid={_pid} tid={_tid} starting, db_path={db_path}", flush=True)
     try:
         provider = make_custom_provider(name="WebDashboard",
                                        time_scale=0.05,
@@ -58,22 +61,23 @@ def run_campaign():
                            provider=provider,
                            tick_interval=0.15,
                            num_event_workers=4)
-        print("[campaign] created, seeding...", flush=True)
+        print(f"[campaign] pid={_pid} created, seeding...", flush=True)
 
         # Seed with agents and borrowers
         campaign.seed(num_agents=30, num_borrowers=500)
-        print("[campaign] seeded, starting background loops...", flush=True)
+        print(f"[campaign] pid={_pid} seeded, starting background loops...", flush=True)
 
         # Start the background loops
         campaign.start()
-        print("[campaign] running, serving metrics now", flush=True)
+        print(f"[campaign] pid={_pid} running, serving metrics now", flush=True)
 
         # Continuously update metrics
         start = time.time()
+        tick = 0
         while state["running"] and (time.time() - start) < 300:
             report = campaign.report()
             snapshot = campaign.build_snapshot()
-            
+
             # Build metrics dict
             counters = report["counters"]
             stats = report["stats"]
@@ -93,8 +97,18 @@ def run_campaign():
                 "ringing_unbound": snapshot.ringing_unbound_calls,
             }
             latest_snapshot = snapshot
+            tick += 1
+            if tick == 1:
+                print(f"[campaign] pid={_pid} first metrics set: "
+                      f"latest_metrics is None = {latest_metrics is None}", flush=True)
+            elif tick % 25 == 0:
+                # ru_maxrss: KB on Linux (Render), bytes on macOS -- diagnostic only.
+                rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                print(f"[campaign] pid={_pid} tick={tick} alive, ru_maxrss={rss}", flush=True)
             time.sleep(0.2)
-        
+        print(f"[campaign] pid={_pid} loop exited normally after {tick} ticks "
+              f"(state_running={state['running']})", flush=True)
+
         # Stop the campaign
         campaign.stop()
     except Exception as e:
