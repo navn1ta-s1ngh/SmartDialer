@@ -1,5 +1,9 @@
 # SmartDialer
 
+**Live demo:** [smartdialer-g20z.onrender.com](https://smartdialer-g20z.onrender.com)
+(free-tier hosting — if it's been idle a while, the first load can take
+30-60s to wake back up)
+
 A small, working prototype of a collections-campaign dialer that supports both
 **Progressive** dialing (one free agent → one call, always safe) and
 **Predictive** dialing (dial ahead of agent availability to raise utilization),
