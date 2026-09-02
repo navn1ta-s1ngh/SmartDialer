@@ -32,6 +32,34 @@ See also [`ARCHITECTURE.md`](ARCHITECTURE.md) for the short architecture
 decision document (why this stack, why this concurrency strategy, why this
 pacing algorithm, etc.).
 
+```
+smartdialer/
+├── smartdialer/                  # the engine — no framework, stdlib + sqlite3 only
+│   ├── models.py                 # state machines, transition tables, shared types
+│   ├── db.py                     # SQLite connection management, schema
+│   ├── agent_store.py            # agent state — atomic reservation guarantee
+│   ├── call_store.py             # call state — idempotent/out-of-order-safe events
+│   ├── providers.py              # TelecomProvider interface + mock providers
+│   ├── pacing.py                 # Progressive & Predictive pacing engines
+│   ├── safety.py                 # Safety Controller — independent capacity check
+│   ├── allocator.py              # only module allowed to call the provider
+│   ├── campaign.py               # orchestrates the loops, builds snapshots
+│   └── metrics.py                # EWMA stats, circuit breaker, counters
+├── tests/                        # 38 automated tests
+├── templates/dashboard.html      # front end for the Flask dashboard
+├── simulate.py                   # Scenarios A–D + chaos + safety on/off comparison
+├── load_test.py                  # 100/1,000/10,000-agent throughput test
+├── web_dashboard.py              # Flask live dashboard (/, /api/metrics)
+├── dashboard.py                  # terminal-only live dashboard (stdlib curses)
+├── workflow_inspector.py         # interactive backend inspector (pacing log, states)
+├── requirements.txt
+├── Procfile / render.yaml        # production/deploy config (gunicorn)
+├── README.md                     # this file
+├── ARCHITECTURE.md               # architecture decision document
+├── DASHBOARD_DEMO.md             # dashboard walkthrough / demo script
+└── PRESENTATION_GUIDE.md         # presentation script and talking points
+```
+
 ---
 
 ## 1. What the system does
