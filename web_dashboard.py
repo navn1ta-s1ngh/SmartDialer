@@ -155,12 +155,36 @@ def call_states():
         return jsonify({}), 503
     return jsonify(latest_snapshot.call_state_counts)
 
-# Started at import time (not inside __main__) so the campaign also runs
-# under a production WSGI server such as `gunicorn web_dashboard:app`,
-# which imports this module directly and never executes __main__.
-state["running"] = True
-campaign_thread = threading.Thread(target=run_campaign, daemon=True)
-campaign_thread.start()
+_start_lock = threading.Lock()
+
+def start_campaign_once():
+    """Starts the background campaign thread in whichever process calls
+    this -- idempotent, so it's safe to call from more than one place.
+
+    This is NOT called at plain module-import time. gunicorn always
+    imports the app once in its master process to validate it loads, and
+    on at least this deployment target the worker inherits that import
+    via fork() rather than re-importing fresh -- fork() only carries the
+    calling thread into the child, so a thread started at import time
+    ends up alive only in the master (which never serves HTTP requests),
+    while the worker's copy of that thread is marked dead by Python's own
+    post-fork bookkeeping, and its copy of module globals like `campaign`
+    is frozen at whatever they were the instant before the fork. Confirmed
+    in production logs: the campaign ran correctly for hundreds of ticks
+    in the master while every request hit a worker reporting
+    campaign=None, thread=dead, forever.
+
+    Calling this from gunicorn's `post_fork` hook (see gunicorn.conf.py)
+    instead guarantees it runs inside the actual process handling
+    requests. The `__main__` block below still needs its own call for the
+    plain `python3 web_dashboard.py` path, which has no fork involved."""
+    global campaign_thread
+    with _start_lock:
+        if campaign_thread is not None:
+            return
+        state["running"] = True
+        campaign_thread = threading.Thread(target=run_campaign, daemon=True)
+        campaign_thread.start()
 
 if __name__ == "__main__":
     print("\n" + "="*70)
@@ -169,6 +193,8 @@ if __name__ == "__main__":
     print("Starting campaign in background...")
     print("Press Ctrl+C to stop")
     print("="*70 + "\n")
+
+    start_campaign_once()
 
     # Give campaign a moment to start
     time.sleep(1)

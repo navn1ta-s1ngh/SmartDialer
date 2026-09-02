@@ -4,15 +4,20 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    # --timeout 120: Render's free tier runs on a heavily shared/throttled
-    # CPU. Seeding 30 agents + 500 borrowers (530 sequential SQLite inserts
-    # on startup) is fast on a normal machine but can occasionally exceed
-    # gunicorn's default 30s worker timeout under contention, which kills
-    # and restarts the "unresponsive" worker mid-seed -- forever, since the
-    # replacement worker just re-seeds and gets killed again before it
-    # finishes. Confirmed via /api/metrics's debug field showing a dead
-    # background thread with the Campaign object never constructed.
-    startCommand: gunicorn web_dashboard:app --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT
+    # --config gunicorn.conf.py: starts the campaign's background thread
+    # via gunicorn's post_fork hook, inside the actual worker process --
+    # not at module-import time. Confirmed in production logs that this
+    # environment's worker inherits the master's already-imported module
+    # via fork() instead of re-importing fresh, and fork() doesn't carry
+    # other threads into the child: a thread started at import time ran
+    # perfectly, forever, in the master -- which never serves a single
+    # HTTP request -- while every real request hit a worker whose copy of
+    # `campaign` was frozen at None from the instant before the fork.
+    # --timeout 120: a generous safety margin, kept regardless, since
+    # Render's free tier runs on a shared/throttled CPU and the default
+    # 30s gunicorn worker timeout leaves little room for the 530
+    # sequential SQLite inserts done while seeding.
+    startCommand: gunicorn web_dashboard:app --config gunicorn.conf.py --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT
     envVars:
       # Without this, Python block-buffers stdout when it isn't a TTY (as
       # on Render), so print()/traceback output from the background
