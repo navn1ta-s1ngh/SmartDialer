@@ -1,327 +1,188 @@
-# SmartDialer Backend Workflow Presentation Guide
+# SmartDialer Presentation Guide
 
-## Quick Presentation Toolkit
+There are four ways to show how this system actually behaves rather than
+just describe it: the live dashboard, the workflow inspector, direct SQL
+against the campaign's own database, and the architecture diagrams in the
+README. Each one shows a different layer of the same underlying fact — a
+pacing engine that wants to dial aggressively, and a Safety Controller
+that independently checks whether that's actually safe before any call
+goes out.
 
-You have **4 ways to show the backend workflow**:
+## The live dashboard
 
----
+Running `python3 web_dashboard.py` and opening http://localhost:9000
+gives the most immediate view: a 30-agent campaign working through 500
+borrowers in predictive mode, with metrics refreshing twice a second. The
+number that matters most sits in the "Compliance risk" tile — the count
+of calls where a borrower answered and no agent was free to take them.
+With the Safety Controller active, that number stays at zero for the
+entire run, however long it's left going. Turn the Safety Controller off
+(the comparison further down shows exactly how) and the same pacing
+engine, on the same seed and call volume, produces an abandon rate in
+the high twenties to high thirties percent — which is the whole reason
+this boundary exists in the first place.
 
-## 1. **Live Dashboard** (Real-time, Visual) 🎨
-**Best for:** Stakeholders, non-technical audience
+Below the metrics tiles sit two horizontal bar charts, agent status and
+call status, both kept in a fixed pipeline order rather than sorted
+alphabetically, so a bar's position stays put and only its length moves
+as counts change. The answer-rate figure is worth pointing at directly:
+it's a live EWMA, and watching it for the first twenty or so calls shows
+it visibly settling rather than sitting at some hardcoded constant.
 
-```bash
-# Already running on
-http://localhost:9000
+## The workflow inspector
+
+`python3 workflow_inspector.py`, run from the repo root while a campaign
+is active (the dashboard or any of the simulation scripts), opens a small
+menu against the same SQLite database the dashboard is writing to:
+recent pacing decisions, an agent-state snapshot, a call-state snapshot,
+aggregate Safety Controller decision counts, and a single borrower's full
+journey through the system end to end.
+
+Option 1 is usually the one worth showing first — ten rows of
+`requested / approved / action / reason`, and in practice most of them
+read REDUCE, each one naming the exact number that was too aggressive and
+the exact capacity it got cut down to:
+
 ```
-
-### What to show:
-- Real-time metrics updating (refresh every 500ms)
-- Agent status chart (horizontal bars, fixed pipeline order)
-- Call status chart (horizontal bars, fixed pipeline order)
-- Compliance risk / abandoned calls tile (must be **0**)
-- Answer rate adaptation (EWMA)
-
-### Narration:
-```
-"This dashboard shows a live 30-agent campaign processing 500 borrowers 
-in predictive dialing mode. The key metric is 'Abandoned Calls' — see how 
-it stays at zero? That's the Safety Controller working. Without it, this 
-same pacing engine would create 38% abandoned calls."
-```
-
----
-
-## 2. **Workflow Inspector** (Backend Details, Text-based) 📊
-**Best for:** Engineers, technical deep-dive
-
-```bash
-cd smartdialer   # repo root
-python3 workflow_inspector.py
-```
-
-### Menu options:
-```
-1. Recent pacing decisions      → Shows APPROVE/REDUCE/REJECT/FALLBACK
-2. Agent state snapshot         → Where are agents right now?
-3. Call state snapshot          → Call distribution breakdown
-4. Safety decisions (all-time)  → Statistics of controller decisions
-5. Workflow trace               → One borrower's complete journey
-```
-
-### Sample output:
-```
-Recent Pacing Decisions (Last 10)
-================================
 Time        Req  App Action              Reason
 16:24:07    54   4   REDUCE              requested 54 exceeds safe unbound capacity 4
 16:24:08    52   3   REDUCE              requested 52 exceeds safe unbound capacity 3
 16:24:09    48   5   REDUCE              requested 48 exceeds safe unbound capacity 5
 ```
 
----
+That's the pacing engine asking for something ambitious every 150ms, and
+the Safety Controller answering back with a number derived from a fresh
+read of actual agent availability — not from whatever the pacing engine
+assumed.
 
-## 3. **SQL Queries** (Raw Database Inspection) 🗄️
-**Best for:** Compliance audits, detailed inspection
+## Reading the database directly
 
 The campaign writes to a fresh temp-directory SQLite file every run
-(`tempfile.mkdtemp()`), not a fixed path — easiest way in is
-`python3 workflow_inspector.py`, which auto-discovers it. For raw SQL,
-find the path first:
+(`tempfile.mkdtemp()`), not a fixed path, so `sqlite3 /tmp/whatever.db`
+won't work twice in a row. The inspector above finds it automatically;
+to do it by hand instead:
 
 ```bash
 lsof -p $(pgrep -f web_dashboard.py) 2>/dev/null | grep web_dashboard.db
 sqlite3 <path-from-above>
 ```
 
-### Key queries:
+The queries worth having ready:
 
-**See pacing decisions:**
 ```sql
-SELECT ts, requested, approved, action, reason 
-FROM pacing_log 
-ORDER BY ts DESC 
-LIMIT 20;
+-- pacing decisions, most recent first
+SELECT ts, requested, approved, action, reason
+FROM pacing_log ORDER BY ts DESC LIMIT 20;
+
+-- the compliance metric itself -- should read 0
+SELECT COUNT(*) FROM calls WHERE state = 'ABANDONED';
+
+-- where every agent sits right now
+SELECT state, COUNT(*) FROM agents GROUP BY state;
+
+-- how often each Safety Controller action actually fires
+SELECT action, COUNT(*) FROM pacing_log GROUP BY action ORDER BY COUNT(*) DESC;
 ```
 
-**See abandoned calls (compliance metric):**
-```sql
-SELECT COUNT(*) as abandoned_count
-FROM calls 
-WHERE state = 'ABANDONED';
--- Result: 0 ✅
+## Architecture diagrams
+
+These live in the README rather than repeated here — [§2](README.md#2-architecture)
+has the pipeline diagram and the agent/call state machines, and
+[ARCHITECTURE.md](ARCHITECTURE.md) has the reasoning behind each piece
+(why SQLite, why this concurrency pattern, why this pacing formula).
+
+## Walking through it end to end
+
+Started cold, the sequence is always the same. The campaign seeds 30
+agents and 500 borrowers, the pacing loop fires its first tick, and the
+Safety Controller evaluates that first request against a snapshot that's
+mostly idle agents — so early decisions tend toward APPROVE. Within the
+first ten or fifteen seconds, calls are flowing, the answer-rate EWMA is
+still jumping around on a small sample, and available agents starts
+dropping as some move into DIALING or CONNECTED.
+
+By the fifteen-to-forty-second mark it settles into a steady state: the
+pacing loop keeps ticking every 150ms, event workers keep draining
+provider callbacks into call-state transitions, and the decision log
+fills up mostly with REDUCE — the pacing engine consistently wants more
+than the Safety Controller will allow, and gets cut down rather than
+outright rejected. Calls initiated keeps climbing, the answer rate
+settles somewhere around 20-35% for this seed, available agents
+oscillates instead of trending toward zero or thirty, and — the one
+number that's supposed to never move — abandoned calls stays at 0.
+
+The four actions the Safety Controller can take, in order of how often
+they actually show up in a normal run:
+
+| Decision | What it means |
+|---|---|
+| REDUCE | Request was too aggressive — dial fewer than asked (the common case) |
+| APPROVE | Request was already within safe capacity — dial exactly as asked |
+| REJECT | No safe capacity right now — zero dials this tick |
+| FALLBACK_TO_PROGRESSIVE | Unsafe for predictive dialing — progressive-only until conditions recover |
+
+Forcing a failure scenario makes the same mechanism visible from a
+different angle. `python3 dashboard.py` (the terminal version) exposes
+three keys live: `o` toggles a simulated provider outage, `c` crashes the
+answer rate to 8%, `d` drops 15 agents at once. `python3 simulate.py`
+runs the scripted equivalent of all of this — Scenario D specifically
+chains an agent drop, a provider outage, and an answer-rate crash back to
+back. In every case the same thing happens: available capacity changes,
+the next tick's snapshot reflects it immediately (there's no cache to go
+stale), the pacing engine's request changes accordingly, and abandoned
+calls still doesn't move.
+
+## The comparison that makes the point
+
+`simulate.py` includes a bonus run that isolates exactly one variable:
+the same pacing engine, the same seed, the same call volume, run once
+with the Safety Controller enforcing its boundary and once with it
+removed. A real run looked like this (exact numbers shift run to run —
+this uses real threads and wall-clock timing — but the shape holds):
+
+```
+safety_on:       answered=25  abandoned=0   (0% abandon rate)
+safety_reckless: answered=44  abandoned=17  (38.6% abandon rate)
 ```
 
-**See agent state RIGHT NOW:**
-```sql
-SELECT state, COUNT(*) as count 
-FROM agents 
-GROUP BY state;
-```
+Nothing about the pacing engine changed between those two runs. The only
+difference is whether something downstream double-checked its work
+before dialing.
 
-**See agent utilization:**
-```sql
-SELECT 
-  (SELECT COUNT(*) FROM agents WHERE state='CONNECTED') as talking,
-  (SELECT COUNT(*) FROM agents WHERE state='AVAILABLE') as available,
-  (SELECT COUNT(*) FROM agents WHERE state='WRAP_UP') as wrapping_up,
-  (SELECT COUNT(*) FROM agents) as total;
-```
+## Things worth knowing off the top of your head
 
-**See Safety Controller decisions distribution:**
-```sql
-SELECT action, COUNT(*) as count 
-FROM pacing_log 
-GROUP BY action 
-ORDER BY count DESC;
-```
+How it stops two workers from double-booking the same agent: a single
+atomic conditional update, `UPDATE agents SET state='DIALING' WHERE
+state='AVAILABLE' AND agent_id=?` — of two threads racing on the same
+row, exactly one matches the WHERE clause and wins.
 
----
+How it handles events arriving out of order: the call state machine only
+accepts legal forward transitions. `RINGING → ANSWERED` goes through;
+`COMPLETED → RINGING` is rejected outright, so a stale or duplicate event
+can't rewind a call that's already finished.
 
-## 4. **Architecture Diagram** (Visual Workflow) 📐
+How the answer rate adapts: it's an EWMA, decay 0.85 by default — every
+outcome nudges it, so a real shift in behavior shows up within a handful
+of calls rather than being diluted by weeks of history.
 
-See [README.md §2](README.md#2-architecture) for the pipeline diagram and
-the agent/call state machines, and [ARCHITECTURE.md](ARCHITECTURE.md) for
-the design rationale behind each piece.
+What happens if the provider degrades: its health score drops, the
+Safety Controller's overdial factor gets multiplied down toward zero
+along with it, and once health falls under 55% the circuit breaker opens
+and forces a fallback to progressive-only dialing until several
+consecutive healthy ticks earn back predictive mode.
 
----
+## Reference
 
-## Presentation Flow (5-10 minutes)
+| Tool | Purpose |
+|---|---|
+| `python3 web_dashboard.py` → http://localhost:9000 | live visual dashboard |
+| `python3 workflow_inspector.py` | interactive backend inspection |
+| `sqlite3 <path>` (see above for finding it) | raw queries against the live database |
+| `DASHBOARD_DEMO.md` | metric-by-metric walkthrough of the dashboard specifically |
+| `python3 simulate.py [--fast]` | scripted scenarios A-D, chaos, and the safety on/off comparison |
 
-### **0-2 Minutes: Introduce the Problem**
-```
-"Collections call centers want to maximize utilization but face a 
-compliance risk: if you dial too aggressively (predictive), a borrower 
-might answer and have nobody to talk to — an abandoned connected call.
-
-This system proves you can dial aggressively AND guarantee zero 
-abandonment with a hard safety boundary."
-```
-
-### **2-4 Minutes: Show the Architecture**
-Point to the pipeline:
-```
-Campaign (30 agents, 500 borrowers)
-    ↓
-Pacing Engine: "I want to dial 54 calls"
-    ↓
-Safety Controller: "I've checked capacity. I approve 4."
-    ↓
-Call Allocator: "Dialing 4 calls"
-    ↓
-Provider (Real telecom events)
-    ↓
-Event Workers: Processing call outcomes
-    ↓
-Back to Pacing (loop, every 150ms)
-```
-
-### **4-7 Minutes: Show the Dashboard**
-Open http://localhost:9000, watch metrics:
-- Calls initiated (controlled by Safety)
-- Answer rate (adapts in real-time)
-- Available agents (dynamic capacity)
-- **Abandoned calls = 0** ✅
-
-Say:
-```
-"Watch these metrics. We've been running for ~3 minutes, and see:
-- 200+ calls initiated
-- 40+ answered
-- 0 abandoned
-
-If we removed the Safety Controller, at 200 calls initiated with this 
-answer rate, we'd have ~15-20 calls answered with nowhere to route them.
-But we have 0. The Safety Controller prevented it."
-```
-
-### **7-10 Minutes: Show the Backend**
-Open workflow inspector, choose option 1 (recent pacing decisions):
-```
-16:24:07    54   4   REDUCE              requested 54 exceeds safe capacity
-16:24:08    52   3   REDUCE              requested 52 exceeds safe capacity
-```
-
-Say:
-```
-"Here's what's happening behind the scenes. Every 150ms:
-
-1. Pacing engine computes: 'Given current utilization, answer rate, 
-   and margin, I want to dial THIS many'
-   
-2. Safety controller says: 'But we only have THIS many agents available 
-   times our overdial factor. REDUCE your request.'
-   
-3. We dial the approved amount.
-
-This decision happens every tick. And the result: zero abandoned calls."
-```
-
----
-
-## Key Metrics to Highlight
-
-| Metric | What It Shows | Target |
-|--------|---|---|
-| **Abandoned Calls** | Compliance risk | **0** |
-| **Answer Rate** | How often borrowers answer | ~20-35% |
-| **Calls Initiated** | Throughput (Safety-gated) | Growing |
-| **Calls Completed** | Success rate | Steady climb |
-| **Available Agents** | Current capacity | 15-25 (dynamic) |
-| **Safety Decisions** | REDUCE (most), APPROVE, REJECT, FALLBACK | Stats matter |
-
----
-
-## Before-and-After Comparison
-
-**What we show in simulation:**
-```
-Safety ON:   answered=25, abandoned=0 (0% abandon rate)      ✅
-Safety OFF:  answered=44, abandoned=17 (38.6% abandon rate)  ❌
-```
-
-**Narrative:**
-```
-"Same pacing engine. Same seed. Same call volume. Same answer rate.
-
-The only difference: is the Safety Controller running?
-
-With it: 25 answered, 0 abandoned. Perfect compliance.
-Without it: 44 answered, 17 abandoned. Compliance violation.
-
-The Safety Controller is the difference."
-```
-
----
-
-## Technical Questions You Can Answer
-
-**Q: How does it prevent double-booking agents?**
-A: Atomic DB operations. `UPDATE agents SET state='DIALING' WHERE state='AVAILABLE' AND agent_id=?` — only one worker can win this race.
-
-**Q: What if events arrive out-of-order?**
-A: Call state machine validates transitions. `RINGING → ANSWERED` is allowed. `COMPLETED → RINGING` is rejected.
-
-**Q: How does it adapt to answer rate?**
-A: EWMA (exponentially weighted moving average). Every call outcome updates it. Formula: `rate = 0.85*rate + 0.15*outcome`.
-
-**Q: What if the provider goes down?**
-A: Provider health score drops. Safety Controller's `overdial_factor *= provider_health`. Circuit breaker opens at health < 55%, forces fallback to progressive.
-
----
-
-## Tools Available
-
-| Tool | Purpose | Command |
-|---|---|---|
-| **Dashboard** | Real-time viz | `http://localhost:9000` |
-| **Inspector** | Backend inspection | `python3 workflow_inspector.py` |
-| **SQLite** | Raw queries | `sqlite3 <path>` — path varies per run, see §3 above |
-| **Logs** | Decision history | See pacing_log table |
-| **Dashboard deep-dive** | Metric-by-metric walkthrough | `DASHBOARD_DEMO.md` |
-
----
-
-## Failure Scenarios (Bonus Demo)
-
-If you want to show **how the system responds to failures**:
-
-```bash
-# See simulate.py for these scenarios
-python3 simulate.py --fast
-
-# Scenario D shows:
-# - 15 agents suddenly disappear
-# - Provider outage
-# - Answer rate crashes
-# - Result: Still 0 abandoned calls (Safety adapts)
-```
-
----
-
-## Presentation Checklist
-
-- [ ] Dashboard running on http://localhost:9000
-- [ ] Browser showing live metrics
-- [ ] Have `workflow_inspector.py` ready in a second terminal
-- [ ] Know the 4 Safety Controller decisions: APPROVE, REDUCE, REJECT, FALLBACK_TO_PROGRESSIVE
-- [ ] Memorize the key stat: **abandoned = 0** (always, with Safety on)
-- [ ] Have the `lsof`/`sqlite3` fallback ready in case the inspector isn't handy (§3)
-- [ ] Know the answer-rate EWMA mechanism (smooths ~85% history + ~15% new outcome, by default)
-- [ ] Understand agent state transitions: `AVAILABLE → RESERVED → DIALING → CONNECTED → WRAP_UP → AVAILABLE`
-
----
-
-## Talking Points by Audience
-
-**For executives / non-technical:**
-1. "This system prevents compliance violations without sacrificing throughput."
-2. "Abandoned call rate: 0%, with the Safety Controller on."
-3. "The exact same pacing engine produces a ~25-40% abandon rate without it."
-4. "The live dashboard shows this running, not just claimed."
-
-**For engineers:**
-1. Pacing engine has zero import path to the provider or allocator — verified by a test, not just a convention.
-2. Every contended write is a single atomic `UPDATE ... WHERE <precondition>`.
-3. Out-of-order/duplicate provider events are handled by idempotency-key dedup + transition-table validation.
-4. EWMA for adaptive answer rate; hysteresis (3+ healthy ticks) before predictive overdial resumes after a fallback.
-5. Concurrent event workers share one SQLite file — no distributed consensus needed at this scale.
-
-**For compliance/legal:**
-1. Zero abandoned calls means zero violations of that specific rule, by construction.
-2. Every pacing decision is logged to `pacing_log` — requested, approved, action, reason.
-3. Safety thresholds are enforced atomically from a snapshot queried fresh each tick, not cached.
-4. Automatic fallback to progressive-only dialing if the provider degrades or abandonment starts climbing.
-
----
-
-## Bottom Line
-
-The presentation is simply:
-
-1. **Show the dashboard** (visual proof)
-2. **Explain the pipeline** (architecture)
-3. **Show pacing decisions** (backend logic)
-4. **Highlight abandoned=0** (compliance win)
-5. **Compare with/without Safety** (the value)
-
-That's it. The system speaks for itself.
+The short version of all of this: the dashboard shows it happening live,
+the inspector shows why each decision was made, the database backs both
+of those up with a persisted audit trail, and the before/after comparison
+proves the Safety Controller — not the pacing engine — is what's actually
+holding the compliance guarantee up.
