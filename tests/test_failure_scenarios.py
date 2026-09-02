@@ -10,10 +10,10 @@ down -- sleeps) so time_scale is kept small to keep the suite fast.
 import time
 import pytest
 
-from smartdialer.campaign import Campaign
-from smartdialer.providers import make_provider_a, make_provider_b
-from smartdialer.models import DialMode, AgentState, CallState
-from smartdialer.safety import SafetyController
+from engine.campaign import Campaign
+from engine.providers import make_provider_a, make_provider_b
+from engine.models import DialMode, AgentState, CallState
+from engine.safety import SafetyController
 
 
 def run_campaign(tmp_path, name, mode, provider, num_agents=15, num_borrowers=400,
@@ -44,9 +44,9 @@ def test_agent_never_bound_to_two_active_calls_under_load(tmp_path):
 
 
 def test_worker_crash_does_not_leak_agent_or_call(tmp_path):
-    from smartdialer.db import Database
-    from smartdialer.agent_store import AgentStore
-    from smartdialer.call_store import CallStore
+    from engine.db import Database
+    from engine.agent_store import AgentStore
+    from engine.call_store import CallStore
 
     db = Database(str(tmp_path / "crash.db"))
     agents = AgentStore(db)
@@ -132,8 +132,8 @@ def test_sudden_answer_rate_drop_reduces_predictive_request(tmp_path):
     """Historical answer rate 70% suddenly becomes ~10%: the pacing
     engine's request should shrink as RollingStats adapts, independent
     of whatever the Safety Controller does on top."""
-    from smartdialer.pacing import PredictivePacingEngine
-    from smartdialer.models import Snapshot
+    from engine.pacing import PredictivePacingEngine
+    from engine.models import Snapshot
 
     engine = PredictivePacingEngine()
 

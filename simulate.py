@@ -30,10 +30,10 @@ import json
 import time
 import os
 
-from smartdialer.campaign import Campaign
-from smartdialer.providers import make_custom_provider, make_provider_b
-from smartdialer.models import DialMode
-from smartdialer.safety import SafetyController
+from engine.campaign import Campaign
+from engine.providers import make_custom_provider, make_provider_b
+from engine.models import DialMode
+from engine.safety import SafetyController
 
 
 def fresh_db_path(path: str) -> str:

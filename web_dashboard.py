@@ -13,9 +13,9 @@ import tempfile
 import threading
 import time
 from flask import Flask, render_template, jsonify
-from smartdialer.campaign import Campaign
-from smartdialer.providers import make_custom_provider
-from smartdialer.models import DialMode
+from engine.campaign import Campaign
+from engine.providers import make_custom_provider
+from engine.models import DialMode
 
 app = Flask(__name__)
 

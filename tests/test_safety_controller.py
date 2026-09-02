@@ -1,7 +1,7 @@
 import pytest
 
-from smartdialer.models import Snapshot, PacingDecisionRequest, DialMode, SafetyAction
-from smartdialer.safety import SafetyController
+from engine.models import Snapshot, PacingDecisionRequest, DialMode, SafetyAction
+from engine.safety import SafetyController
 
 
 def make_snapshot(**overrides):

@@ -13,9 +13,9 @@ import os
 import threading
 import pytest
 
-from smartdialer.db import Database
-from smartdialer.agent_store import AgentStore
-from smartdialer.models import AgentState
+from engine.db import Database
+from engine.agent_store import AgentStore
+from engine.models import AgentState
 
 
 @pytest.fixture
@@ -137,7 +137,7 @@ def test_stale_reservation_is_reclaimed_after_lease_expiry(store):
 
 
 def test_borrower_claim_is_also_race_free(tmp_path):
-    from smartdialer.call_store import CallStore
+    from engine.call_store import CallStore
     db = Database(str(tmp_path / "test4.db"))
     calls = CallStore(db)
     calls.seed_borrowers(["b1"], "camp1")

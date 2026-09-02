@@ -11,9 +11,9 @@ event application from multiple threads for the same call.
 import threading
 import pytest
 
-from smartdialer.db import Database
-from smartdialer.call_store import CallStore
-from smartdialer.models import CallState, DialMode
+from engine.db import Database
+from engine.call_store import CallStore
+from engine.models import CallState, DialMode
 
 
 @pytest.fixture
@@ -154,11 +154,11 @@ def test_brief_example_sequence_through_the_real_allocator(tmp_path):
     CallAllocator (not a hand-crafted test shortcut), proving the
     end-to-end system -- including the synthetic CONNECTED bridge step --
     lands in a single, correct COMPLETED state."""
-    from smartdialer.db import Database
-    from smartdialer.agent_store import AgentStore
-    from smartdialer.allocator import CallAllocator
-    from smartdialer.metrics import RollingStats, Counters
-    from smartdialer.providers import make_provider_a
+    from engine.db import Database
+    from engine.agent_store import AgentStore
+    from engine.allocator import CallAllocator
+    from engine.metrics import RollingStats, Counters
+    from engine.providers import make_provider_a
 
     db = Database(str(tmp_path / "brief.db"))
     agents = AgentStore(db)
@@ -175,7 +175,7 @@ def test_brief_example_sequence_through_the_real_allocator(tmp_path):
     calls.apply_event(call_id, CallState.INITIATED, event_key="init")
     calls.apply_event(call_id, CallState.RINGING, event_key="ring")
 
-    from smartdialer.models import ProviderEvent
+    from engine.models import ProviderEvent
     allocator.handle_provider_event(ProviderEvent(call_id, CallState.ANSWERED, "k1"))
     allocator.handle_provider_event(ProviderEvent(call_id, CallState.ANSWERED, "k2"))
     allocator.handle_provider_event(ProviderEvent(call_id, CallState.ANSWERED, "k3"))

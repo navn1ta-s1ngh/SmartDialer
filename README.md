@@ -36,7 +36,7 @@ pacing algorithm, etc.).
 
 ```
 smartdialer/
-├── smartdialer/                  # the engine — no framework, stdlib + sqlite3 only
+├── engine/                       # the engine — no framework, stdlib + sqlite3 only
 │   ├── models.py                 # state machines, transition tables, shared types
 │   ├── db.py                     # SQLite connection management, schema
 │   ├── agent_store.py            # agent state — atomic reservation guarantee
@@ -56,6 +56,7 @@ smartdialer/
 ├── workflow_inspector.py         # interactive backend inspector (pacing log, states)
 ├── requirements.txt
 ├── Procfile / render.yaml        # production/deploy config (gunicorn)
+├── gunicorn.conf.py              # starts the campaign thread via post_fork
 ├── README.md                     # this file
 ├── ARCHITECTURE.md               # architecture decision document
 ├── DASHBOARD_DEMO.md             # dashboard walkthrough / demo script

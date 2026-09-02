@@ -1,8 +1,8 @@
 import inspect
 
-from smartdialer.models import Snapshot, DialMode
-from smartdialer.pacing import ProgressivePacingEngine, PredictivePacingEngine
-import smartdialer.providers as providers_module
+from engine.models import Snapshot, DialMode
+from engine.pacing import ProgressivePacingEngine, PredictivePacingEngine
+import engine.providers as providers_module
 
 
 def make_snapshot(**overrides):
@@ -77,7 +77,7 @@ def test_pacing_engines_have_no_access_to_a_provider_or_allocator():
     predictive engine bypasses the Safety Controller and calls the
     provider directly' structurally impossible, not just discouraged by
     convention."""
-    import smartdialer.pacing as pacing_module
+    import engine.pacing as pacing_module
     assert "providers" not in pacing_module.__dict__, \
         "pacing.py must not import providers.py at all"
 

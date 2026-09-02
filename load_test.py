@@ -25,8 +25,8 @@ import statistics
 import threading
 import time
 
-from smartdialer.db import Database
-from smartdialer.agent_store import AgentStore
+from engine.db import Database
+from engine.agent_store import AgentStore
 
 
 def seed_fast(store: AgentStore, n: int):

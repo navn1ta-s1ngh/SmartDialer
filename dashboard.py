@@ -31,9 +31,9 @@ import os
 import time
 from collections import deque
 
-from smartdialer.campaign import Campaign
-from smartdialer.providers import make_custom_provider
-from smartdialer.models import DialMode
+from engine.campaign import Campaign
+from engine.providers import make_custom_provider
+from engine.models import DialMode
 
 AGENT_STATES = ["OFFLINE", "AVAILABLE", "RESERVED", "DIALING", "CONNECTED", "WRAP_UP", "PAUSED"]
 CALL_STATES = ["QUEUED", "RESERVED", "INITIATED", "RINGING", "ANSWERED", "CONNECTED",
